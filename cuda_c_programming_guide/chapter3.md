@@ -1,54 +1,189 @@
-## chapter3 Programming Interface
+
+
+​        CUDA C++ provides a simple path for users familiar with the C++ programming language to easily write programs for execution by the device. 
+
+​        It consists of a minimal set of extensions to the C++ language and a runtime library. 
+
+​        The core language extensions have been introduced in Programming Model. They allow programmers to define a kernel as a C++ function and use some new syntax to specify the grid and block dimension each time the function is called. A complete description of all extensions can be found in C++ Language Extensions(Appendix B). Any source file that contains some of these extensions must be compiled with **nvcc** as outlined in Compilation with NVCC (chapter3.1). 
+
+​        The runtime is introduced in CUDA Runtime(chapter3.2). It provides C and C++ functions that execute on the host to allocate and deallocate device memory, transfer data between host memory and device memory, manage systems with multiple devices, etc. A complete description of the runtime can be found in the *CUDA reference manual*.
+
+​        The runtime is built on top of a lower-level C API, the CUDA driver API, which is also accessible by the application. The driver API provides an additional level of control by exposing lower-level concepts such as CUDA contexts - the analogue(相似的事物) of host processes for the device - and CUDA modules - the analogue of dynamically loaded libraries for the device. (CUDA context类比主机中的进程这个概念，CUDA module类比主机中的动态链接库) Most applications do not use the driver API as they do not need this additional level of control and when using the runtime, context and module management are implicit, resulting in more concise code. As the runtime is interoperable(互相操作，互相配合) with the driver API, most applications that need some driver API features can default to use the runtime API and only use the driver API where needed. The driver API is introduced in Driver API(Appendix I) and fully described in the reference manual. 
+
+### 3.1. Compilation with NVCC 
+
+​        Kernels can be written using the CUDA instruction set architecture, called PTX, which is described in the *PTX reference manual*. It is however usually more effective to use a high-level programming language such as C++. In both cases, kernels must be compiled into binary code by nvcc to execute on the device.(kernel函数可以用PTX指令集或者high level的语言来写)
+
+​        nvcc is a compiler driver that simplifies the process of compiling C++ or PTX code: It provides simple and familiar command line options and executes them by invoking the collection of tools that implement the different compilation stages. This section gives an overview of nvcc workflow and command options. A complete description can be found in the *nvcc user manual*. 
+
+#### 3.1.1. Compilation Workflow 
+
+##### 3.1.1.1. Offline Compilation 
+
+​        Source files compiled with nvcc can include a mix of host code (i.e., code that executes on the host) and device code (i.e., code that executes on the device). nvcc's basic workflow consists in separating device code from host code and then: 
+
+1 compiling the device code into an assembly form (PTX code) and/or binary form (cubin object), 
+
+2 and modifying the host code by replacing the <<<...>>> syntax introduced in Kernels (and described in more details in Execution Configuration) by the necessary CUDA runtime function calls to load and launch each compiled kernel from the PTX code and/or cubin object.
+
+(过程就三步，先把host code和device code分离，然后把device code编译成二进制文件，把文件中<<<...>>>替换成CUDA runtime函数调用，用来加载从PTXcode和cubin对象中编译的核函数)
+
+​        The modified host code is output either as C++ code that is left to be compiled using another tool or as object code directly by letting nvcc invoke the host compiler during the last compilation stage. 
+
+(修改完的host code要么作为c++代码由其他工具编译，要么由nvcc启动主机的编译器来编译)
+
+Applications can then: 
+
+1、Either link to the compiled host code (this is the most common case), 
+
+2、Or ignore the modified host code (if any) and use the CUDA driver API (see Driver API) to load and execute the PTX code or cubin object. 
+
+(应用然后去链接编译好的主机代码，或者忽略修改后的主机代码，而去使用CUDA driver API来加载和执行PTX code或者cubin对象)
+
+##### 3.1.1.2. Just-in-Time Compilation 
+
+​        Any PTX code loaded by an application at runtime is compiled further to binary code by the device driver. This is called just-in-time compilation. Just-in-time compilation increases application load time, but allows the application to benefit from any new compiler improvements coming with each new device driver. It is also the only way for applications to run on devices that did not exist at the time the application was compiled, as detailed in Application Compatibility(chapter3.1.4). 
+
+​        When the device driver just-in-time compiles some PTX code for some application, it automatically caches a copy of the generated binary code in order to avoid repeating the compilation in subsequent invocations of the application. The cache - referred to as compute cache - is automatically invalidated when the device driver is upgraded, so that applications can benefit from the improvements in the new just-in-time compiler built into the device driver.
+
+(应用在运行时直接加载PTX代码，然后编译成二进制代码被称为实时编译。实时编译增加了应用的加载时间，但是好处是能够享受新编译器提升带来的好处，当这些代码被编译之后就被缓存起来了避免重复编译。当编译器升级后，这些缓存会自动失效)
+
+​        Environment variables are available to control just-in-time compilation as described in CUDA Environment Variables 
+
+（有一些环境变量能够控制实时编译）
+
+​        As an alternative to using nvcc to compile CUDA C++ device code, NVRTC can be used to compile CUDA C++ device code to PTX at runtime. NVRTC is a runtime compilation library for CUDA C++; more information can be found in the NVRTC User guide. (NVRTC能够把high level的代码编译成PTX代码)
+
+#### 3.1.2. Binary Compatibility 
+
+​        Binary code is architecture-specific. A cubin object is generated using the compiler option *-code* that specifies the targeted architecture: For example, compiling with -code=sm_35 produces binary code for devices of compute capability 3.5. Binary compatibility is guaranteed from one minor revision to the next one, but not from one minor revision to the previous one or across major revisions. In other words, a cubin object generated for compute capability X.y will only execute on devices of compute capability X.z where z≥y. （这一段主要讨论的是二进制码的兼容性）
+
+```
+Binary compatibility is supported only for the desktop. It is not supported for Tegra.
+Also, the binary compatibility between desktop and Tegra is not supported.(桌面产品才会有二进制的兼容性，Tegra没有)
+```
+
+#### 3.1.3. PTX Compatibility
+
+​         Some PTX instructions are only supported on devices of higher compute capabilities. For example, Warp Shuffle Functions are only supported on devices of compute capability 3.0 and above. The *-arch* compiler option specifies the compute capability that is assumed when compiling C++ to PTX code. So, code that contains warp shuffle, for example, must be compiled with -arch=compute_30 (or higher).
+
+编译选项-arch指定计算兼容性。举例来说，warp shuffle函数只支持计算兼容性大于等于3.0的，所以如果high level代码中由warp shuffle，编译时必须添加编译选项 -arch=compute_30
+
+​        PTX code produced for some specific compute capability can always be compiled to binary code of greater or equal compute capability. (如果PTX代码有特定的compute capability编译，那么一定可以编译出等于或者更高版本compute capability的二进制代码) Note that a binary compiled from an earlier PTX version may not make use of some hardware features. (但是可能使用不了新的feature) For example, a binary targeting devices of compute capability 7.0 (Volta) compiled from PTX generated for compute capability 6.0 (Pascal) will not make use of Tensor Core instructions, since these were not available on Pascal. As a result, the final binary may perform worse than would be possible if the binary were generated using the latest version of PTX.
+
+####  3.1.4. Application Compatibility 
+
+​        To execute code on devices of specific compute capability, an application must load binary or PTX code that is compatible with this compute capability as described in Binary Compatibility and PTX Compatibility. In particular, to be able to execute code on future architectures with higher compute capability (for which no binary code can be generated yet), an application must load PTX code that will be just-in-time compiled for these devices (see Just-in-Time Compilation). 
+
+​        Which PTX and binary code gets embedded in a CUDA C++ application is controlled by the *-arch* and *-code* compiler options or the *-gencode* compiler option as detailed in the nvcc user manual. For example, 
+
+```shell
+nvcc x.cu 
+       -gencode arch=compute_35,code=sm_35 
+       -gencode arch=compute_50,code=sm_50 
+       -gencode arch=compute_60,code=\'compute_60,sm_60\' 
+```
+
+​        embeds binary code compatible with compute capability 3.5 and 5.0 (first and second -gencode options) and PTX and binary code compatible with compute capability 6.0 (third -gencode option). 
+
+​        Host code is generated to automatically select at runtime the most appropriate code to load and execute, which, in the above example, will be: (尽管随意编译，选择依旧由主机代码自己定)
+
+1、3.5 binary code for devices with compute capability 3.5 and 3.7, 
+
+2、5.0 binary code for devices with compute capability 5.0 and 5.2, 
+
+3、6.0 binary code for devices with compute capability 6.0 and 6.1, 
+
+4、PTX code which is compiled to binary code at runtime for devices with compute capability 7.0 and higher. 
+
+​        x.cu can have an optimized code path that uses warp shuffle operations, for example, which are only supported in devices of compute capability 3.0 and higher. The \_\_CUDA_ARCH\_\_ macro can be used to differentiate various code paths based on compute capability. It is only defined for device code. When compiling with *-arch=compute_35* for example, \_\_CUDA_ARCH\_\_ is equal to 350. 
+
+​        Applications using the driver API must compile code to separate files and explicitly load and execute the most appropriate file at runtime. 
+
+​        The Volta architecture introduces Independent Thread Scheduling which changes the way threads are scheduled on the GPU. For code relying on specific behavior of SIMT scheduling in previous architecures, Independent Thread Scheduling may alter the set of participating threads, leading to incorrect results. To aid migration while implementing the corrective actions detailed in Independent Thread Scheduling, Volta developers can opt-in to Pascal's thread scheduling with the compiler option combination *- arch=compute_60   -code=sm_70*.
+
+​        The nvcc user manual lists various shorthands for the -arch, -code, and -gencode compiler options. For example, -arch=sm_35 is a shorthand for -arch=compute_35 - code=compute_35,sm_35 (which is the same as -gencode arch=compute_35,code= \'compute_35,sm_35\'). 
+
+#### 3.1.5. C++ Compatibility 
+
+​        The front end of the compiler processes CUDA source files according to C++ syntax rules. Full C++ is supported for the host code. However, only a subset of C++ is fully supported for the device code as described in C++ Language Support. (device code不支持全部的c++，只是一个子集)
+
+#### 3.1.6. 64-Bit Compatibility 
+
+​        The 64-bit version of nvcc compiles device code in 64-bit mode (i.e., pointers are 64-bit). Device code compiled in 64-bit mode is only supported with host code compiled in 64- bit mode. 
+
+​        Similarly, the 32-bit version of nvcc compiles device code in 32-bit mode and device code compiled in 32-bit mode is only supported with host code compiled in 32-bit mode. 
+
+​        The 32-bit version of nvcc can compile device code in 64-bit mode also using the -m64 compiler option. The 64-bit version of nvcc can compile device code in 32-bit mode also using the -m32 compiler option. (32位的nvcc可以编译出64位的device code，同理，64位的nvcc可以编译出32位的device code)
 
 ### 3.2 CUDA Runtime
 
-静态链接库 cudart.lib libcudart.a
-
-动态链接库 cudart.dll cudart.so
-
-
-
-page-locked host memory 页锁定的主机内存
-
-asynchronous concurrent execution (异步并发执行)
-
-multi-device system 单机多卡系统
-
-error checking
-
-call stack
-
-texture and surface memory
-
-graphics interoperability
+​        The runtime is implemented in the cudart library, which is linked to the application, either statically via cudart.lib or libcudart.a, or dynamically via cudart.dll or libcudart.so. Applications that require cudart.dll and/or cudart.so for dynamic linking typically include them as part of the application installation package. It is only safe to pass the address of CUDA runtime symbols between components that link to the same instance of the CUDA runtime.
+​        All its entry points(函数入口) are prefixed with cuda.
+​        As mentioned in **Heterogeneous Programming**, the CUDA programming model assumes a system composed of a host and a device, each with their own separate memory. **Device Memory**(chapter3.2.2) gives an overview of the runtime functions used to manage device memory.
+​        **Shared Memory**(chapter3.2.2)illustrates the use of shared memory, introduced in **Thread Hierarchy,**
+to maximize performance.
+​        **Page-Locked Host Memory**(页锁定的主机内存, chapter3.2.4) introduces page-locked host memory that is required to overlap(这里的overlap到底是什么意思) kernel execution with data transfers between host and device memory.
+​        **Asynchronous Concurrent Execution**(异步并发执行, chapter3.2.5) describes the concepts and API used to enable asynchronous concurrent execution at various levels in the system.
+​        **Multi-Device System**(单机多卡系统, chapter3.2.6) shows how the programming model extends to a system with multiple devices attached to the same host.
+​        **Error Checking**(chapter3.2.9) describes how to properly check the errors generated by the runtime.
+​        **Call Stack**(chapter3.2.10) mentions the runtime functions used to manage the CUDA C++ call stack.
+​        **Texture and Surface Memory**(chapter3.2.11) presents the texture and surface memory spaces that provide another way to access device memory; they also expose a subset of the GPU texturing hardware.
+​        **Graphics Interoperability**(chapter3.2.12) introduces the various functions the runtime provides to
+interoperate with the two main graphics APIs, OpenGL and Direct3D.  
 
 #### 3.2.1 Initialization
 
-        运行时没有显式的初始化函数,当地一个运行时函数被调用时直接就初始化了(除了错误处理和版本管理的函数).当计算运行时函数的运行时间和解释第一次调用运行时函数的错误码时必须时刻记住这一点.
-    
-        在初始化过程中,运行时在系统中为每个设备(gpu)创建了一个CUDA上下文.这个上下文只是这个设备的一个初始上下文,并且在应用的所有主机线程中共享.作为上下文创建的一部分,如果需要的话,设备的代码是实时编译的,并且加载到设备的内存中. 所有这一切全是透明的.如果需要,对于驱动API的互操作性(interoperability),设备的基础上下文能够从驱动的API中获取
-    
-       当一个主机线程调用cudaDeviceReset(), 这个操作销毁了主机线程当前操作的设备的初始上下文.下一次任何将这个设备作为current的主机线程调用运行时函数都会为这个设备创建一个新的初始上下文.
+​        There is no explicit initialization function for the runtime; it initializes the first time a runtime function is called (more specifically any function other than functions from the error handling and version management sections of the reference manual). One needs to keep this in mind when timing runtime function calls and when interpreting the error code from the first call into the runtime.
+
+​       运行时没有显式的初始化函数,当第一个运行时函数被调用时直接就初始化了(除了错误处理和版本管理的函数).当计算运行时函数的运行时间和解释第一次调用运行时函数的错误码时必须时刻记住这一点.
+
+​        During initialization, the runtime creates a CUDA context for each device in the system(see Context for more details on CUDA contexts). This context is the primary context for this device and it is shared among all the host threads of the application. As part of this  context creation, the device code is just-in-time compiled if necessary (see Just-in-Time Compilation) and loaded into device memory. This all happens transparently. If needed, e.g. for driver API interoperability, the primary context of a device can be accessed from the driver API as described in Interoperability between Runtime and Driver APIs.  
+
+​       在初始化过程中,运行时在系统中为每个设备(gpu)创建了一个CUDA上下文.这个上下文只是这个设备的一个初始上下文,并且在应用的所有主机线程中共享.作为上下文创建的一部分,如果需要的话,设备的代码是实时编译的,并且加载到设备的内存中. 所有这一切全是透明的.如果需要,对于驱动API的互操作性(interoperability),设备的初始上下文能够从驱动的API中获取
+
+​        When a host thread calls cudaDeviceReset(), this destroys the primary context of the device the host thread currently operates on (i.e., the current device as defined in Device Selection). The next runtime function call made by any host thread that has this device as current will create a new primary context for this device.  
+
+​         当一个主机线程调用cudaDeviceReset(), 这个操作销毁了主机线程当前操作的设备的初始上下文.下一次任何将这个设备作为current的主机线程调用运行时函数都会为这个设备创建一个新的初始上下文.
 
 ```
-cuda接口使用的全局状态(global state)是在主机程序初始化时初始化的,在主程序终结时被销毁的.CUDA运行时和驱动不能检测到全局状态(global state)是否有效,所以在主程序初始化或者main函数结束后使用这些接口都会导致未定义行为
+    The CUDA interfaces use global state that is initialized during host program initiation and destroyed during host program termination. The CUDA runtime and driver cannot detect if this state is invalid, so using any of these interfaces (implicitly or explicity) during program initiation or termination after main) will result in undefined behavior.
+    cuda接口使用的全局状态(global state)是在主机程序初始化时初始化的,在主程序终结时被销毁的.CUDA运行时和驱动不能检测到全局状态(global state)是否有效,所以在主程序初始化或者main函数结束后使用这些接口都会导致未定义行为
+    什么是global state???
 ```
 
 #### 3.2.2 Device Memory
 
-         在异构编程中,CUDA编程模型假定系统由一个主机(host)和一个设备(device)组成, 而且每个都有自己独立的内存.核函数运行在设备内存中,所以运行时需要提供函数来分配,回收和复制设备的内存,同时在主机内存和设备内存之间传输数据.
-    
-         设备内存被分配成线性内存或者CUDA数组.
-    
-         CUDA数组的内存布局时不透明的,专门为了获取纹理做了优化. 这一点在章节3.2.11 Texture and Surface Memory中描述.
-    
-         线性内存是在单个统一的地址空间中分配的,这就意味着独立分配的实体能够通过指针来引用,例如二叉树和链表.地址空间的大小取决于主机(host)系统和GPU的compute capability
+​        As mentioned in **Heterogeneous Programming**, the CUDA programming model assumes a system composed of a host and a device, each with their own separate memory. Kernels operate out of device memory, so the runtime provides functions to allocate, deallocate, and copy device memory, as well as transfer data between host memory and device memory.
+
+​       正如之前在异构编程这一节中提到的,CUDA编程模型假定系统由一个主机(host)和一个设备(device)组成, 而且每个都有自己独立的存储器.核函数运行在设备存储器中,所以运行时需要提供函数来分配,回收和复制设备的内存,同时在主机存储器和设备存储器之间传输数据.
+
+​        Device memory can be allocated either as linear memory or as CUDA arrays. 
+
+​        设备存储器能够被分配成线性存储器或者CUDA数组.
+
+​        CUDA arrays are opaque memory layouts optimized for texture fetching. They are described in Texture and Surface Memory.
+
+​         CUDA数组的内存布局是不透明的,专门为了获取纹理做了优化. 这一点在**Texture and Surface Memory**(chapter3.2.11)中描述.
+
+​        Linear memory is allocated in a **single unified address space**, which means that separately allocated entities can reference one another via pointers, for example, in a binary tree or linked list. The size of the address space depends on the host system (CPU) and the compute capability  
+
+​        线性存储器是在单个统一的地址空间中分配的,这就意味着独立分配的实体能够通过指针来引用,例如二叉树和链表.地址空间的大小取决于主机(host)系统和GPU的compute capability
+
+![table_1](D:\ComputerScience\note\cs_note\cuda_c_programming_guide\graph\table_1.PNG)
 
 ```
-在compute capability 为5.3或者更早的显卡中,CUDA驱动创建一个未提交的40bit虚拟保留地址来保证分配的内存在支持的范围中.这个保留呈现为一个保留的虚拟地址,但是并不占用任何物理地址直到程序真正分配了内存
+    On devices of compute capability 5.3 (Maxwell) and earlier, the CUDA driver creates
+an uncommitted 40bit virtual address reservation to ensure that memory allocations
+(pointers) fall into the supported range. This reservation appears as reserved virtual
+memory, but does not occupy any physical memory until the program actually
+allocates memory.
+    在compute capability 为5.3或者更早的显卡中,CUDA驱动创建一个未提交的40bit虚拟保留地址来保证分配的内存在支持的范围中.这个保留呈现为一个保留的虚拟地址,但是并不占用任何物理地址直到程序真正分配了内存
 ```
 
-        线性存储器一般使用cudaMalloc()来分配内存, 使用cudaFree()来释放内存, 使用cudaMemcpy()来在主机内存和设备内存之间传输数据.在向量加的代码例子中,向量需要从主机内存拷贝到设备内存.
+​        Linear memory is typically allocated using cudaMalloc() and freed using cudaFree() and data transfer between host memory and device memory are typically done using  cudaMemcpy(). In the vector addition code sample of Kernels, the vectors need to be copied from host memory to device memory:  
+
+​        线性存储器一般使用cudaMalloc()来分配内存, 使用cudaFree()来释放内存, 使用cudaMemcpy()来在主机内存和设备内存之间传输数据.在向量加的代码例子中,向量需要从主机内存拷贝到设备内存.
 
 ```c++
 __global__ void VecAdd(float* A, float* B, float* C, int N)
@@ -93,16 +228,16 @@ int main()
 }
 ```
 
-        线性存储器也可以通过cudaMallocPitch()和cudaMalloc3D()来分配.推荐使用这两个函数用来分配2D和3D的数组,因为这能确保分配的空间会通过padding来满足章节 5.3.2 Device memory Accesses中描述的字节对齐的要求, 也因此能保证在获取行地址或者使用别的API(cudaMemcpy2D和cudaMemcpy3D)来在2D数组和设备内存的其他区域之间复制数据时获得最好的性能.返回的pitch或者stride必须用来获取数组元素.
-    
-        以下代码是在设备中分配一个二维数组并且循环遍历数组元素的设备代码
+​        Linear memory can also be allocated through cudaMallocPitch() and cudaMalloc3D(). These functions are recommended for allocations of 2D or 3D arrays as it makes sure that the allocation is appropriately padded to meet the alignment requirements described in **Device Memory Accesses**(chapter5.3.2), therefore ensuring best performance when accessing the row addresses or performing copies between 2D arrays and other regions of device memory (using the cudaMemcpy2D() and cudaMemcpy3D() functions). The returned pitch (or stride) must be used to access array elements. The  following code sample allocates a width x height 2D array of floating-point values and shows how to loop over the array elements in device code:  
+
+​        线性存储器也可以通过cudaMallocPitch()和cudaMalloc3D()来分配.推荐使用这两个函数用来分配2D和3D的数组,因为这能确保分配的空间会通过padding来满足章节 5.3.2 Device memory Accesses中描述的字节对齐的要求, 也因此能保证在获取行地址或者使用别的API(cudaMemcpy2D和cudaMemcpy3D)来在2D数组和设备内存的其他区域之间复制数据时获得最好的性能.返回的pitch或者stride必须用来获取数组元素.以下代码是在设备中分配一个二维数组并且循环遍历数组元素的设备代码
 
 ```c++
 // Host code
 int width = 64, height = 64;
 float* devPtr;
 size_t pitch;
-cudaMallocPitch(&devPtr, pitch, width * sizeof(float), height);
+cudaMallocPitch(&devPtr, &pitch, width * sizeof(float), height);
 MyKernel<<<100, 512>>>(devPtr, pitch, width, height);
 // Device code
 __global__ void MyKernel(float* devPtr, size_t pitch, int width, int height)
@@ -116,7 +251,11 @@ __global__ void MyKernel(float* devPtr, size_t pitch, int width, int height)
 }
 ```
 
-        以下代码是在设备中分配一个三维数组并且循环遍历数组元素的设备代码
+
+
+​        The following code sample allocates a width x height x depth 3D array of floatingpoint values and shows how to loop over the array elements in device code:  
+
+​       以下代码是在设备中分配一个三维数组并且循环遍历数组元素的设备代码
 
 ```c++
 int width = 64, height = 64, depth = 64;
@@ -143,7 +282,17 @@ int width, int height, int depth)
 }
 ```
 
-    参考手册列举了...
+
+
+​        The reference manual lists all the various functions used to copy memory between
+linear memory allocated with cudaMalloc(), linear memory allocated with
+cudaMallocPitch() or cudaMalloc3D(), CUDA arrays, and memory allocated for
+variables declared in global or constant memory space.  
+
+​        参考手册列举了...
+
+​        The following code sample illustrates various ways of accessing global variables via the
+runtime API:  
 
 下列代码列举通过运行时API访问全局变量的各种方式
 
@@ -163,9 +312,17 @@ cudaMemcpyToSymbol(devPointer, &ptr, sizeof(ptr));
 
 #### 3.2.3 Shared Memory
 
+​        As detailed in Variable Memory Space Specifiers(appendix B.2) shared memory is allocated using the
+\_\_shared\_\_ memory space specifier.        
+
 ​        共享存储器在分配时使用\_\_share\__存储空间限定符.
 
+​        Shared memory is expected to be much faster than global memory as mentioned in Thread Hierarchy(chapter2.2) and detailed in Shared Memory. It can be used as scratchpad memory (or software managed cache) to minimize global memory accesses from a CUDA block as illustrated by the following matrix multiplication example.  
+
 ​        共享存储器比全局存储器的速度快得多(这一点在Thread HIerarchy中有提到).它可以用来作为scratchpad memory(或者software managed cache)来使得CUDA block对全局存储器的访问达到最低,后面有矩阵乘法的示例代码来阐述这个问题.
+
+​        The following code sample is a straightforward implementation of matrix multiplication
+that does not take advantage of shared memory. Each thread reads one row of A and one column of B and computes the corresponding element of C as illustrated in Figure 9. A is therefore read B.width times from global memory and B is read A.height times.  
 
 ​       下面这部分代码时矩阵乘法的直接实现,并未使用shared_memory.每个线程读取A的一行和B的一列,计算C中对应的元素.因此,A会从全局存储器中被读取B.width次,同理,B也会被读取A.height次.
 
@@ -230,9 +387,19 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
 }
 ```
 
-​       下面这部分代码是使用了shared_memory的矩阵乘法实现.在这个实现中,每个线程块,负责计算一个C的一个子矩阵Csub,线程块的每个线程负责计算Csub中的一个元素.如图所示,Csub等于两个矩形矩阵的乘积;A的子矩阵的维度(A.width,block_size)和Csub的行索引数量相同,B的子矩阵的维度(block_size, B.height)和Csub的列索引数量相同.为了适配设备的资源,这两个矩形的矩阵分割成尽可能多的维度为(block_size, block_size)的方阵,并且Csub最后的结果是这些方阵的和.在计算这些方矩阵的乘积时, 第一步是从全局存储器中加载两个相关的方阵的数据,每个线程加载这些方阵中的一个元素, 然后每个线程计算一个元素的乘积.每个线程累加这些和的结果到寄存器, 而且最后写回到全局存储器中.
+​        The following code sample is an implementation of matrix multiplication that does take
+advantage of shared memory. In this implementation, each thread block is responsible for computing one square sub-matrix Csub of C and each thread within the block is responsible for computing one element of Csub. As illustrated in Figure 10, Csub is equal to the product of two rectangular matrices: the sub-matrix of A of dimension (A.width, block_size) that has the same row indices as Csub, and the sub-matrix of B of dimension (block_size, A.width )that has the same column indices as Csub. In order to fit into the
+device's resources, these two rectangular matrices are divided into as many square matrices of dimension block_size as necessary and Csub is computed as the sum of the products of these square matrices. Each of these products is performed by first loading the two corresponding square matrices from global memory to shared memory with one thread loading one element of each matrix, and then by having each thread compute one element of the product. Each thread accumulates the result of each of these products into a register and once done writes the result to global memory         
+
+​        下面这部分代码是使用了shared_memory的矩阵乘法实现.在这个实现中,每个线程块,负责计算一个C的一个子矩阵Csub,线程块的每个线程负责计算Csub中的一个元素.如图所示,Csub等于两个矩形矩阵的乘积;A的子矩阵的维度(A.width,block_size)和Csub的行索引数量相同,B的子矩阵的维度(block_size, B.height)和Csub的列索引数量相同.为了适配设备的资源,这两个矩形的矩阵分割成尽可能多的维度为(block_size, block_size)的方阵,并且Csub最后的结果是这些方阵的和.在计算这些方矩阵的乘积时, 第一步是从全局存储器中加载两个相关的方阵的数据,每个线程加载这些方阵中的一个元素, 然后每个线程计算一个元素的乘积.每个线程累加这些和的结果到寄存器, 而且最后写回到全局存储器中.
+
+​        By blocking the computation this way, we take advantage of fast shared memory and
+save a lot of global memory bandwidth since A is only read (B.width / block_size) times
+from global memory and B is read (A.height / block_size) times.  
 
 ​        通过分块计算的方式, 我们使用了高速的共享存储器并且节省了大量的全局存储器带宽, 因为A从全局存储器中只被读取B.width/block_size次, B从全局存储器中只被读取了(A.height/block_size)次.
+
+​        The Matrix type from the previous code sample is augmented with a stride field, so that sub-matrices can be efficiently represented with the same type. __device__ functions are used to get and set elements and build any sub-matrix from a matrix.  
 
 ​        相较于之前的代码示例, 接下来的示例中, 矩阵类型增加了一个域stride,因此子矩阵能够高效的表示成相同的类型.\_\_device\_\_函数是用来从矩阵中获取和设置元素, 创建任何子矩阵. 
 
@@ -359,19 +526,35 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
 
 #### 3.2.4 Page-Locked Host Memory (页锁定主机内存)
 
-​        运行时提供了函数来允许使用页锁定主机内存(也叫pinned memory), 这是相对于malloc()分配的regular pageable host memory(可分页内存)
+​        The runtime provides functions to allow the use of page-locked (also known as pinned) host memory (as opposed to regular pageable host memory allocated by malloc()):
 
-​        1、cudaHostAlloc()和cudaFreeHost()分配和释放页锁定主机内存
+​         运行时提供了函数来允许使用页锁定主机内存(也叫pinned memory), 这是相对于malloc()分配的regular pageable host memory(可分页内存)
 
-​        2、cudaHostRegister() 页锁定由malloc()分配的内存
+1、cudaHostAlloc() and cudaFreeHost() allocate and free page-locked host memory; 
 
-​         使用页锁定内存有以下几个好处:
+2、cudaHostRegister() page-locks a range of memory allocated by malloc() (see reference manual for limitations). 
 
-​         1、在页锁定内存和设备内存之间复制数据(Copies between page-locked host memory and device memory can be performed concurrently with kernel execution for some devices )
+1、cudaHostAlloc()和cudaFreeHost()分配和释放页锁定主机内存
 
-​          2、在某些设备上,页锁定内存可以映射到设备的地址空间上,这样可以省略往设备存储器读或者写的时间
+2、cudaHostRegister() 页锁定由malloc()分配的内存
 
-​          3、在一个有前端总线(front-side bus)的系统上, 主机存储器和设备存储器之间的带宽会更高,如果主机存储器是页锁定的,甚至还要高些如果这些页锁定内存被分配成write-combining
+​        Using page-locked host memory has several benefits: 
+
+​        使用页锁定内存有以下几个好处:
+
+1、Copies between page-locked host memory and device memory can be performed concurrently with kernel execution for some devices as mentioned in Asynchronous Concurrent Execution. 
+
+2、On some devices, page-locked host memory can be mapped into the address space of the device, eliminating the need to copy it to or from device memory as detailed in Mapped Memory. 
+
+3、On systems with a front-side bus, bandwidth between host memory and device memory is higher if host memory is allocated as page-locked and even higher if in addition it is allocated as write-combining as described in Write-Combining Memory.
+
+   1、在页锁定内存和设备内存之间复制数据(Copies between page-locked host memory and device memory can be performed concurrently with kernel execution for some devices )
+
+   2、在某些设备上,页锁定内存可以映射到设备的地址空间上,这样可以省略往设备存储器读或者写的时间
+
+   3、在一个有前端总线(front-side bus)的系统上, 主机存储器和设备存储器之间的带宽会更高,如果主机存储器是页锁定的,甚至还要高些如果这些页锁定内存被分配成write-combining
+
+​        Page-locked host memory is a scarce resource however, so allocations in page-locked memory will start failing long before allocations in pageable memory. In addition, by reducing the amount of physical memory available to the operating system for paging, consuming too much page-locked memory reduces overall system performance.  The simple zero-copy CUDA sample comes with a detailed document on the pagelocked memory APIs. 
 
 ​         页锁定存储器是一项稀缺的资源, 如果持续分配页锁定存储器, 那么后续继续分配存储器可能会失败.另外,页锁定存储器减少了操作系统可用于分页的物理存储器,如果可分页存储器消耗太多会导致整体系统的性能下降. 
 
@@ -379,27 +562,49 @@ __global__ void MatMulKernel(Matrix A, Matrix B, Matrix C)
 Page-locked host memory is not cached on non I/O coherent Tegra devices. Also, cudaHostRegister() is not supported on non I/O coherent Tegra devices.
 ```
 
+​       The simple zero-copy CUDA sample comes with a detailed document on the page-locked memory APIs.  
+
 ##### 3.2.4.1 Portable Memory
+
+​        A block of page-locked memory can be used in conjunction with any device in the system (see Multi-Device System for more details on multi-device systems), but by default, the benefits of using page-locked memory described above are only available in conjunction with the device that was current when the block was allocated (and with all devices sharing the same unified address space, if any, as described in Unified Virtual Address Space). To make these advantages available to all devices, the block needs to be allocated by passing the flag cudaHostAllocPortable to cudaHostAlloc() or pagelocked by passing the flag cudaHostRegisterPortable to cudaHostRegister().          
 
 ​        页锁定存储器的块能用来连接系统中的任意设备,但是默认情况下,页锁定存储器带来的性能优势只适用于当页锁定存储器块分配时,当前正在使用的设备(the device that was current).为了使得所有的设备获取这种性能优势,存储器块在分配的时候需要传入flag cudaHostAllocPortable 给cudaHostAlloc()或者通过传入cudaHostRegister() flag cudaHostRegisterPortable
 
 ##### 3.2.4.2 Write-Combining Memory
 
-​        默认情况下页锁定内存分配的时候是可缓存的(cacheable).它可以选择性的分配成write-combining通过给cu daHostAlloc()传入flag cudahostAllocWriteCombined.Write-combining存储器不占用主机的L1缓存和L2缓存,可以留给给多缓存给其他应用.In addition, write-combining memory is not snooped during transfers across the PCI Express bus, which can improve transfer performance by up to 40%.
+​        By default page-locked host memory is allocated as cacheable. It can optionally be allocated as write-combining instead by passing flag cudaHostAllocWriteCombined to cudaHostAlloc(). Write-combining memory frees up the host's L1 and L2 cache resources, making more cache available to the rest of the application. In addition, writecombining memory is not **snooped** during transfers across the PCI Express bus, which can improve transfer performance by up to 40%.  
 
-从host 的 write-combining存储器读取数据不可避免的慢,所以write-combining存储器通常应该只让主机写
+​        默认情况下页锁定内存分配的时候是可缓存的(cacheable).它可以选择性的分配成write-combining通过给cu daHostAlloc()传入flag cudahostAllocWriteCombined.Write-combining存储器不占用主机的L1缓存和L2缓存,可以留给给多缓存给其他应用.In addition, write-combining memory is not **snooped**(窥探) during transfers across the PCI Express bus, which can improve transfer performance by up to 40%.
+
+​        Reading from write-combining memory from the host is prohibitively slow, so write-combining memory should in general be used for memory that the host only writes to.  
+
+​        从host 的 write-combining存储器读取数据不可避免的慢,所以write-combining存储器通常应该只让主机写
 
 ##### 3.2.4.3 Mapped Memory
 
+​        A block of page-locked host memory can also be mapped into the address space of the device by passing flag cudaHostAllocMapped to cudaHostAlloc() or by passing flag cudaHostRegisterMapped to cudaHostRegister(). Such a block has therefore in general two addresses: one in host memory that is returned by cudaHostAlloc() or malloc(), and one in device memory that can be retrieved using cudaHostGetDevicePointer() and then used to access the block from within a kernel. The only exception is for pointers allocated with cudaHostAlloc() and when a unified address space is used for the host and the device as mentioned in Unified Virtual Address Space.  
+
 ​        通过给cudaHostAlloc()传入flag cudaHostAllocMapped(或者把cudaHostRegisterMapped传入cudaHostRegister()), 页锁定存储器块也可以映射到设备存储器的地址空间. 因此这样的存储器块通常有两个地址:一个是主机存储器地址,通常是malloc()或者cudaHostAlloc()返回的, 另一个是设备存储器的地址, 可以通过cudaHostGetDevicePointer()获取. 然后这个地址可以在kernel函数中用来访问存储器块.  The only exception is for pointers allocated with cudaHostAlloc() and when a unified address space is used for the host and the device as mentioned in **Unified Virtual Address Space**.
 
+​         Accessing host memory directly from within a kernel does not provide the same bandwidth as device memory, but does have some advantages:  
+
 ​         设备通过kernel函数直接访问主机存储器的带宽和直接访问设备存储器不同,但是有一些优势:
+
+​        1、There is no need to allocate a block in device memory and copy data between this block and the block in host memory; data transfers are implicitly performed as needed by the kernel;
+
+​        2、There is no need to use streams (see Concurrent Data Transfers) to overlap data
+transfers with kernel execution; the kernel-originated data transfers automatically
+overlap with kernel execution.
 
 ​         1、没有必要在设备存储器中分配一个块,并且在这个存储器块和主机存储器块之间复制数据,数据传输只在和函数需要的时候隐式执行
 
 ​         2、There is no need to use streams (see Concurrent Data Transfers) to overlap data transfers with kernel execution; the kernel-originated data transfers automatically overlap with kernel execution
 
-​        既然映射的页锁定存储器在主机和设备之间共享,但是,应用必须使用steams和events来同步存储器访问来避免任何潜在的read-after-write, write-after-read或者write-after-write的风险.
+​        Since mapped page-locked memory is shared between host and device however,
+the application must synchronize memory accesses using streams or events (see
+Asynchronous Concurrent Execution) to avoid any potential read-after-write, writeafter-read, or write-after-write hazards.         
+
+​         既然映射的页锁定存储器在主机和设备之间共享,但是,应用必须使用steams和events来同步存储器访问来避免任何潜在的read-after-write, write-after-read或者write-after-write的风险.
 
 ​        To be able to retrieve the device pointer to any mapped page-locked memory, page-locked memory mapping must be enabled by calling **cudaSetDeviceFlags**() with the *cudaDeviceMapHost* flag before any other CUDA call is performed. Otherwise, **cudaHostGetDevicePointer**() will return an error.
 ​        **cudaHostGetDevicePointer**() also returns an error if the device does not support mapped page-locked host memory. Applications may query this capability by checking the canMapHostMemory device property (see Device Enumeration), which is equal to 1 for devices that support mapped page-locked host memory.
