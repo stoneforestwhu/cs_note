@@ -1,6 +1,8 @@
 
 
-​        CUDA C++ provides a simple path for users familiar with the C++ programming language to easily write programs for execution by the device. 
+## chapter3 Programming Interface        
+
+CUDA C++ provides a simple path for users familiar with the C++ programming language to easily write programs for execution by the device. 
 
 ​        It consists of a minimal set of extensions to the C++ language and a runtime library. 
 
@@ -243,6 +245,7 @@ MyKernel<<<100, 512>>>(devPtr, pitch, width, height);
 __global__ void MyKernel(float* devPtr, size_t pitch, int width, int height)
 {
 	for (int r = 0; r < height; ++r) {
+        #  pitch是一行占据的字节数，padding之后的大小不是width*sizeof(float)，而由pitch指定
 		float* row = (float*)((char*)devPtr + r * pitch);
 		for (int c = 0; c < width; ++c) {
 			float element = row[c];
@@ -251,9 +254,7 @@ __global__ void MyKernel(float* devPtr, size_t pitch, int width, int height)
 }
 ```
 
-
-
-​        The following code sample allocates a width x height x depth 3D array of floatingpoint values and shows how to loop over the array elements in device code:  
+​        The following code sample allocates a width x height x depth 3D array of floating-point values and shows how to loop over the array elements in device code:  
 
 ​       以下代码是在设备中分配一个三维数组并且循环遍历数组元素的设备代码
 
@@ -282,19 +283,15 @@ int width, int height, int depth)
 }
 ```
 
-
-
 ​        The reference manual lists all the various functions used to copy memory between
-linear memory allocated with cudaMalloc(), linear memory allocated with
-cudaMallocPitch() or cudaMalloc3D(), CUDA arrays, and memory allocated for
-variables declared in global or constant memory space.  
+linear memory allocated with cudaMalloc(), linear memory allocated with cudaMallocPitch() or cudaMalloc3D(), CUDA arrays, and memory allocated for variables declared in global or constant memory space.  
 
 ​        参考手册列举了...
 
 ​        The following code sample illustrates various ways of accessing global variables via the
 runtime API:  
 
-下列代码列举通过运行时API访问全局变量的各种方式
+​        下列代码列举通过运行时API访问全局变量的各种方式
 
 ```c++
 __constant__ float constData[256];
@@ -309,6 +306,8 @@ float* ptr;
 cudaMalloc(&ptr, 256 * sizeof(float));
 cudaMemcpyToSymbol(devPointer, &ptr, sizeof(ptr));
 ```
+
+​        cudaGetSymbolAddress() is used to retrieve the address pointing to the memory allocated for a variable declared in global memory space. The size of the allocated memory is obtained through cudaGetSymbolSize().  
 
 #### 3.2.3 Shared Memory
 
@@ -594,7 +593,7 @@ Page-locked host memory is not cached on non I/O coherent Tegra devices. Also, c
 
 ​        2、There is no need to use streams (see Concurrent Data Transfers) to overlap data
 transfers with kernel execution; the kernel-originated data transfers automatically
-overlap with kernel execution.
+overlap with kernel execution.(没懂)
 
 ​         1、没有必要在设备存储器中分配一个块,并且在这个存储器块和主机存储器块之间复制数据,数据传输只在和函数需要的时候隐式执行
 
@@ -602,9 +601,9 @@ overlap with kernel execution.
 
 ​        Since mapped page-locked memory is shared between host and device however,
 the application must synchronize memory accesses using streams or events (see
-Asynchronous Concurrent Execution) to avoid any potential read-after-write, writeafter-read, or write-after-write hazards.         
+Asynchronous Concurrent Execution) to avoid any potential read-after-write, write-after-read, or write-after-write hazards.         
 
-​         既然映射的页锁定存储器在主机和设备之间共享,但是,应用必须使用steams和events来同步存储器访问来避免任何潜在的read-after-write, write-after-read或者write-after-write的风险.
+​         既然映射的页锁定存储器在主机和设备之间共享,但是,应用必须使用streams和events来同步存储器访问来避免任何潜在的read-after-write, write-after-read或者write-after-write的风险.
 
 ​        To be able to retrieve the device pointer to any mapped page-locked memory, page-locked memory mapping must be enabled by calling **cudaSetDeviceFlags**() with the *cudaDeviceMapHost* flag before any other CUDA call is performed. Otherwise, **cudaHostGetDevicePointer**() will return an error.
 ​        **cudaHostGetDevicePointer**() also returns an error if the device does not support mapped page-locked host memory. Applications may query this capability by checking the canMapHostMemory device property (see Device Enumeration), which is equal to 1 for devices that support mapped page-locked host memory.
@@ -617,10 +616,10 @@ Asynchronous Concurrent Execution) to avoid any potential read-after-write, writ
 concurrently with one another:(可同时进行的操作)
 1、Computation on the host;
 2、Computation on the device;
-3、Memory transfers from the host to the device;
-4、Memory transfers from the device to the host;
-5、Memory transfers within the memory of a given device;
-6、Memory transfers among devices.
+3、Memory transfers from the host to the device;(数据从host到device)
+4、Memory transfers from the device to the host;(数据从device到host)
+5、Memory transfers within the memory of a given device;(设备内部存储器数据传输)
+6、Memory transfers among devices.(设备之间存储器数据传输)
 ​        The level of concurrency achieved between these operations will depend on the feature
 set and compute capability of the device as described below.
 
@@ -632,15 +631,25 @@ set and compute capability of the device as described below.
 3、Memory copies from host to device of a memory block of 64 KB or less;
 4、Memory copies performed by functions that are suffixed with Async;
 5、Memory set function calls.
+
+​        异步执行是把程序的执行权返回给主机线程，主机发出的指令通过cuda driver管理的命令队列来实现管理
+
 ​        Programmers can globally <u>disable</u> asynchronicity of kernel launches for all CUDA
 applications running on a system by setting the **CUDA_LAUNCH_BLOCKING** environment
 variable to 1. This feature is provided for debugging purposes only and <u>should not be</u>
 <u>used as a way to make production software</u> run reliably.
+
+​       kernel的异步执行可以disable,通过把环境变量**CUDA_LAUNCH_BLOCKING**设为1
+
 ​        Kernel launches are synchronous if hardware counters are collected via a profiler (Nsight, Visual Profiler) unless concurrent kernel profiling is enabled. Async memory copies will also be synchronous if they involve host memory that is not page-locked.
+
+​       如果硬件计数器是通过分析器得到的，kernel是同步launch的，除非concurrent kernel profiling使能了(concurrent kernel profiling是什么？) 异步存储器的复制会变成同步操作如果它们的操作对象的host memory不是页锁定的。
 
 ##### 3.2.5.2. Concurrent Kernel Execution
 
 ​        Some devices of compute capability 2.x and higher can execute multiple kernels concurrently. Applications may query this capability by checking the **concurrentKernels** device property (see Device Enumeration), which is equal to 1 for devices that support it.
+
+​         concurrentKernels能决定设备是不是支持并发执行多个kernel
 
 ​        The maximum number of kernel launches that a device can execute concurrently
 depends on its compute capability and is listed in Table 15.
@@ -648,9 +657,11 @@ depends on its compute capability and is listed in Table 15.
 ​       A kernel from one CUDA context cannot execute concurrently with a kernel from
 another CUDA context.
 
+​     不同上下文的kernel不能并发执行
+
 ​      Kernels that use many textures or a large amount of local memory are less likely to execute concurrently with other kernels.
 
-##### 3.2.5.3. Overlap of Data Transfer and Kernel Execution
+##### 3.2.5.3. Overlap of Data Transfer and Kernel Execution(数据传输和kernel函数执行交叠操作)
 
 ​        Some devices can perform an asynchronous memory copy to or from the GPU concurrently with kernel execution. Applications may query this capability by checking the **asyncEngineCount** device property (see Device Enumeration), which is greater than zero for devices that support it. If host memory is involved in the copy, it must be page-locked. (通过查询asyncEngineCount来看GPU是不是支持同时从kernel中异步并发拷贝内存)
 
@@ -658,11 +669,11 @@ another CUDA context.
 
 ##### 3.2.5.4. Concurrent Data Transfers
 
-​        Some devices of compute capability 2.x and higher can overlap copies to and from the device. Applications may query this capability by checking the **asyncEngineCount** device property (see Device Enumeration), which is equal to 2 for devices that support it. In order to be overlapped, any host memory involved in the transfers must be page-locked.
+​        Some devices of compute capability 2.x and higher can overlap copies to and from the device. Applications may query this capability by checking the **asyncEngineCount** device property (see Device Enumeration), which is equal to 2 for devices that support it. In order to be overlapped, any host memory involved in the transfers must be page-locked.(从设备往外拷贝数据操作和往设备写数据操作可以同步进行，只要硬件支持这个feature)
 
 ##### 3.2.5.5. Streams
 
-​        Applications manage the concurrent operations described above through streams. (应用通过streams来管理并发的操作的). A stream is a sequence of commands (possibly issued by different host threads) that execute in order. (一个stream是一个命令队列)Different streams, on the other hand, may execute their commands out of order with respect to one another or concurrently; this behavior is not guaranteed and should therefore not be relied upon for correctness (e.g., inter-kernel communication is undefined). The commands issued on a stream may execute when all the dependencies of the command are met. The dependencies could be previously launched commands on same stream or dependencies from other streams. The successful completion of synchronize call guarantees that all the commands launched are completed.
+​        Applications manage the concurrent operations described above through streams. (应用通过streams来管理并发的操作的). A stream is a sequence of commands (possibly issued by different host threads) that execute in order. (一个stream是一个命令队列)Different streams, on the other hand, may execute their commands out of order with respect to one another or concurrently; this behavior is not guaranteed and should therefore not be relied upon for correctness (e.g., inter-kernel communication is undefined). The commands issued on a stream may execute when all the dependencies of the command are met. The dependencies could be previously launched commands on same stream or dependencies from other streams. **The successful completion of synchronize call guarantees** that all the commands launched are completed.
 
 ###### 3.2.5.5.1. Creation and Destruction
 
@@ -686,13 +697,13 @@ for (int i = 0; i < 2; ++i) {
 }
 ```
 
-Each stream copies its portion of input array hostPtr to array inputDevPtr in device memory, processes inputDevPtr on the device by calling MyKernel(), and copies the result outputDevPtr back to the same portion of hostPtr. Overlapping Behavior describes how the streams overlap in this example depending on the capability of the device. Note that hostPtr must point to page-locked host memory for any overlap to occur.
+​        Each stream copies its portion of input array hostPtr to array inputDevPtr in device memory, processes inputDevPtr on the device by calling MyKernel(), and copies the result outputDevPtr back to the same portion of hostPtr. Overlapping Behavior describes how the streams overlap in this example depending on the capability of the device. Note that hostPtr must point to **page-locked host memory** for any overlap to occur.
 
-Streams are released by calling cudaStreamDestroy().
+​        Streams are released by calling cudaStreamDestroy().
 
 ```c++
 for (int i = 0; i < 2; ++i)
- cudaStreamDestroy(stream[i]);
+  cudaStreamDestroy(stream[i]);
 ```
 
 ​        In case the device is still doing work in the stream when cudaStreamDestroy() is called, the function will return immediately and the resources associated with the stream will be released automatically once the device has completed all work in the stream.
@@ -700,24 +711,23 @@ for (int i = 0; i < 2; ++i)
 ###### 3.2.5.5.2. Default Stream
 
 ​        Kernel launches and host <-> device memory copies that do not specify any stream parameter, or equivalently that set the stream parameter to zero, are issued to the default stream. They are therefore executed in order. 
-​        For code that is compiled using the --default-stream per-thread compilation flag(or that defines the CUDA_API_PER_THREAD_DEFAULT_STREAM macro before including CUDA headers (cuda.h and cuda_runtime.h)), the default stream is a regular stream and each host thread has its own default stream.
+​        For code that is compiled using the --default-stream per-thread compilation flag(or that defines the CUDA_API_PER_THREAD_DEFAULT_STREAM macro before including CUDA headers (cuda.h and cuda_runtime.h)), the default stream is a regular stream and each host thread has its own default stream.(这里是每个线程都有一个default stream)
 
 ```c++
-#define CUDA_API_PER_THREAD_DEFAULT_STREAM 1 cannot be used to
-enable this behavior when the code is compiled by nvcc as nvcc implicitly
-includes cuda_runtime.h at the top of the translation unit. In this case the
---default-stream per-thread compilation flag needs to be used or the
-CUDA_API_PER_THREAD_DEFAULT_STREAM macro needs to be defined with the -
-DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 compiler flag.
+    #define CUDA_API_PER_THREAD_DEFAULT_STREAM 1 cannot be used to enable this behavior when the code is compiled by nvcc as nvcc implicitly includes cuda_runtime.h at the top of the translation unit. 
+In this case the --default-stream per-thread compilation flag needs to be used or the CUDA_API_PER_THREAD_DEFAULT_STREAM macro needs to be defined with the -DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 compiler flag.
+    如果是nvcc来编译代码则使用的CUDA_API_PER_THREAD_DEFAULT_STREAM无效，除非编译的时候加上-DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 才行
 ```
 
-​        For code that is compiled using the --default-stream legacy compilation flag, the default stream is a special stream called the NULL stream and each device has a single NULL stream used for all host threads. The NULL stream is special as it causes implicit synchronization as described in Implicit Synchronization.
+​        For code that is compiled using the **--default-stream legacy** compilation flag, the default stream is a special stream called the NULL stream and each device has a single NULL stream used for all host threads. The NULL stream is special as it causes implicit synchronization as described in Implicit Synchronization.(这里是所有的主机线程有一个NULL stream)
 
-​        For code that is compiled without specifying a --default-stream compilation flag, -- default-stream legacy is assumed as the default.
+​        For code that is compiled without specifying a **--default-stream** compilation flag, -**-default-stream legacy** is assumed as the default.
 
 ###### 3.2.5.5.3. Explicit Synchronization
 
 ​        There are various ways to explicitly synchronize streams with each other.
+
+​        显式同步stream的API列举：
 
 ​        **cudaDeviceSynchronize**() waits until all preceding commands in all streams of all host threads have completed. 
 
@@ -757,6 +767,8 @@ DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 compiler flag.
 
 ​         For example, on devices that do not support concurrent data transfers, the two streams of the code sample of Creation and Destruction do not overlap at all because the memory copy from host to device is issued to stream[1] after the memory copy from device to host is issued to stream[0], so it can only start once the memory copy from device to host issued to stream[0] has completed. If the code is rewritten the following way (and assuming the device supports overlap of data transfer and kernel execution)
 
+​       数据传输overlap需要硬件的支持，kernel执行overlap需要的硬件的支持，kernel执行和数据传输overlap也需要硬件的支持，这些feature并不是所有的设备都支持，并且相对独立的feature。如果设备不支持数据传输overlap，那么需要做的如下例(数据传输和kernel执行是overlap的，但是两个stream的数据传输是按顺序执行的)
+
 ```c++
 for (int i = 0; i < 2; ++i)
     cudaMemcpyAsync(inputDevPtr + i * size, hostPtr + i * size, size, cudaMemcpyHostToDevice, stream[i]);
@@ -767,7 +779,7 @@ for (int i = 0; i < 2; ++i)
 ```
 
 ​        then the memory copy from host to device issued to stream[1] overlaps with the kernel launch issued to stream[0].
-​        On devices that do support concurrent data transfers, the two streams of the code sample of Creation and Destruction do overlap: The memory copy from host to device issued to stream[1] overlaps with the memory copy from device to host issued to stream[0] and even with the kernel launch issued to stream[0] (assuming the device supports overlap of data transfer and kernel execution). However, for devices of compute capability 3.0 or lower, the kernel executions cannot possibly overlap because the second kernel launch is issued to stream[1] after the memory copy from device to host is issued to stream[0], so it is blocked until the first kernel launch issued to stream[0] is complete as per Implicit Synchronization. If the code is rewritten as above, the kernel executions overlap (assuming the device supports concurrent kernel execution) since the second kernel launch is issued to stream[1] before the memory copy from device to host is issued to stream[0]. In that case however, the memory copy from device to host issued to stream[0] only overlaps with the last thread blocks of the kernel launch issued to stream[1] as per Implicit Synchronization, which can represent only a small portion of the total execution time of the kernel.
+​        On devices that do support concurrent data transfers, the two streams of the code sample of Creation and Destruction do overlap: The memory copy from host to device issued to stream[1] overlaps with the memory copy from device to host issued to stream[0] and even with the kernel launch issued to stream[0] (assuming the device supports overlap of data transfer and kernel execution). However, for devices of compute capability 3.0 or lower, the kernel executions cannot possibly overlap because the second kernel launch is issued to stream[1] after the memory copy from device to host is issued to stream[0], so it is blocked until the first kernel launch issued to stream[0] is complete as per **Implicit Synchronization**(chapter3.2.5.5.4). If the code is rewritten as above, the kernel executions overlap (assuming the device supports concurrent kernel execution) since the second kernel launch is issued to stream[1] before the memory copy from device to host is issued to stream[0]. In that case however, the memory copy from device to host issued to stream[0] only overlaps with the last thread blocks of the kernel launch issued to stream[1] as per Implicit Synchronization, which can represent only a small portion of the total execution time of the kernel.
 
 ###### 3.2.5.5.6 Host Functions (Callbacks)
 
@@ -788,11 +800,17 @@ for (size_t i = 0; i < 2; ++i) {
 ```
 
 ​         The commands that are issued in a stream after a host function do not start executing before the function has completed. 
-​          A host function enqueued into a stream must not make CUDA API calls (directly or indirectly), as it might end up waiting on itself if it makes such a call leading to a deadlock.  
+
+​        上面代码的例子中，如果直接printf("...")，语法上是没有问题，但是由于memory copy都是异步执行，并不能保证Mycallback函数能在拷贝操作结束之后执行  
+
+​          A host function enqueued into a stream must not make CUDA API calls (directly or indirectly), as it might end up waiting on itself if it makes such a call leading to a deadlock.  (不要再call)
 
 ###### 3.2.5.5.7. Stream Priorities 
 
 ​         The relative priorities of streams can be specified at creation using cudaStreamCreateWithPriority(). The range of allowable priorities, ordered as [ highest priority, lowest priority ] can be obtained using the cudaDeviceGetStreamPriorityRange() function. At runtime, pending work in higher-priority streams takes preference over pending work in low-priority streams. 
+
+Graph类似批量操作，预先定义，然后执行，便于优化
+
 ​         The following code sample obtains the allowable range of priorities for the current device, and creates streams with the highest and lowest available priorities. 
 
 ```C++
@@ -810,15 +828,15 @@ cudaStreamCreateWithPriority(&st_low, cudaStreamNonBlocking, priority_low);
 ​        Graphs present a new model for work submission in CUDA. A graph is a series of operations, such as kernel launches, connected by dependencies, which is defined separately from its execution. This allows a graph to be defined once and then launched repeatedly. Separating out the definition of a graph from its execution enables a number of optimizations: first, CPU launch costs are reduced compared to streams, because much of the setup is done in advance; second, presenting the whole workflow to CUDA enables optimizations which might not be possible with the piecewise work submission mechanism of streams. 
 ​        To see the optimizations possible with graphs, consider what happens in a stream: when you place a kernel into a stream, the host driver performs a sequence of operations in preparation for the execution of the kernel on the GPU. These operations, necessary for setting up and launching the kernel, are an overhead cost which must be paid for each kernel that is issued. For a GPU kernel with a short execution time, this overhead cost can be a significant fraction of the overall end-to-end execution time.
 
-Work submission using graphs is separated into three distinct stages: definition, instantiation, and execution.
+​        Work submission using graphs is separated into three distinct stages: definition, instantiation(实例化), and execution.
 1、During the definition phase, a program creates a description of the operations in the graph along with the dependencies between them.
 2、Instantiation takes a snapshot of the graph template, validates it, and performs much of the setup and initialization of work with the aim of minimizing what needs to be done at launch. The resulting instance is known as an executable graph.
 3、 An executable graph may be launched into a stream, similar to any other CUDA work. It may be launched any number of times without repeating the instantiation.
 
 ###### 3.2.5.6.1. Graph Structure
 
-An operation forms a node in a graph. The dependencies between the operations are the edges. These dependencies constrain the execution sequence of the operations.
-An operation may be scheduled at any time once the nodes on which it depends are complete. Scheduling is left up to the CUDA system.
+​        An operation forms a node in a graph. The dependencies between the operations are the edges. These dependencies constrain the execution sequence of the operations.
+​        An operation may be scheduled at any time once the nodes on which it depends are complete. Scheduling is left up to the CUDA system.
 
 3.2.5.6.1.1 Node Types
 
@@ -869,7 +887,7 @@ cudaStreamEndCapture(stream, &graph);
 
 ​         A call to cudaStreamBeginCapture() places a stream in capture mode. When a stream is being captured, work launched into the stream is not enqueued for execution. It is instead appended to an internal graph that is progressively being built up. This graph is then returned by calling cudaStreamEndCapture(), which also ends capture mode for the stream. A graph which is actively being constructed by stream capture is referred to as a capture graph. 
 
-​        Stream capture can be used on any CUDA stream except cudaStreamLegacy (the "NULL stream"). Note that it can be used on cudaStreamPerThread. If a program is using the legacy stream, it may be possible to redefine stream 0 to be the per-thread stream with no functional change. See Default Stream. 
+​        Stream capture can be used on any CUDA stream except cudaStreamLegacy (the "NULL stream"). Note that it can be used on cudaStreamPerThread. If a program is using the legacy stream, it may be possible to redefine stream 0 to be the per-thread stream with no functional change. See **Default Stream**(chapter3.2.5.5.2). 
 
 ​        Whether a stream is being captured can be queried with cudaStreamIsCapturing(). 
 
@@ -904,19 +922,19 @@ cudaStreamEndCapture(stream1, &graph);
 ​        Graph returned by the above code is shown in Figure 12.
 
 ```
-When a stream is taken out of capture mode, the next non-captured item in the stream (if any) will still have a dependency on the most recent prior non-captured item, despite intermediate items having been removed.
+    When a stream is taken out of capture mode, the next non-captured item in the stream (if any) will still have a dependency on the most recent prior non-captured item, despite intermediate items having been removed.
 ```
 
 3.2.5.6.3.2. Prohibited and Unhandled Operations
 
 ​        It is invalid to synchronize or query the execution status of a stream which is being captured or a captured event, because they do not represent items scheduled for execution. It is also invalid to query the execution status of or synchronize a broader handle which encompasses an active stream capture, such as a device or context handle when any associated stream is in capture mode.
 
-​        When any stream in the same context is being captured, and it was not created with cudaStreamNonBlocking, any attempted use of the legacy stream is invalid. This is because the legacy stream handle at all times encompasses these other streams; enqueueing to the legacy stream would create a dependency on the streams being captured, and querying it or synchronizing it would query or synchronize the streams being captured. 
+​        When any stream in the same context is being captured, and it was not created with cudaStreamNonBlocking(这是一个flag，并不是函数), any attempted use of the legacy stream is invalid. This is because the legacy stream handle at all times encompasses these other streams; enqueueing to the legacy stream would create a dependency on the streams being captured, and querying it or synchronizing it would query or synchronize the streams being captured. 
 
 ​        It is therefore also invalid to call synchronous APIs in this case. Synchronous APIs, such as cudaMemcpy(), enqueue work to the legacy stream and synchronize it before returning. 
 
 ```
-       As a general rule, when a dependency relation would connect something that is captured with something that was not captured and instead enqueued for execution, CUDA prefers to return an error rather than ignore the dependency. An exception is made for placing a stream into or out of capture mode; this severs a dependency relation between items added to the stream immediately before and after the mode transition. 
+    As a general rule, when a dependency relation would connect something that is captured with something that was not captured and instead enqueued for execution, CUDA prefers to return an error rather than ignore the dependency. An exception is made for placing a stream into or out of capture mode; this severs a dependency relation between items added to the stream immediately before and after the mode transition. 
 ```
 
 ​        It is invalid to merge two separate capture graphs by waiting on a captured event from a stream which is being captured and is associated with a different capture graph than the event. It is invalid to wait on a non-captured event from a stream which is being captured. 
@@ -980,9 +998,9 @@ cudaEventElapsedTime(&elapsedTime, start, stop);
 
  When a synchronous function is called, control is not returned to the host thread before the device has completed the requested task. Whether the host thread will then yield, block, or spin can be specified by calling cudaSetDeviceFlags()with some specific flags (see reference manual for details) before any other CUDA call is performed by the host thread. 
 
-3.2.6. Multi-Device System 
+#### 3.2.6. Multi-Device System 
 
-3.2.6.1. Device Enumeration 
+##### 3.2.6.1. Device Enumeration 
 
 ​        A host system can have multiple devices. The following code sample shows how to enumerate these devices, query their properties, and determine the number of CUDAenabled devices. 
 
@@ -998,8 +1016,9 @@ for (device = 0; device < deviceCount; ++device) {
 }
 ```
 
-3.2.6.2. Device Selection
-         A host thread can set the device it operates on at any time by calling cudaSetDevice(). Device memory allocations and kernel launches are made on the currently set device; streams and events are created in association with the currently set device. If no call to cudaSetDevice() is made, the current device is device 0.
+##### 3.2.6.2. Device Selection
+
+​         A host thread can set the device it operates on at any time by calling cudaSetDevice(). Device memory allocations and kernel launches are made on the currently set device; streams and events are created in association with the currently set device. If no call to cudaSetDevice() is made, the current device is device 0.
 
 ​        The following code sample illustrates how setting the current device affects memory allocation and kernel execution.
 
@@ -1015,8 +1034,9 @@ cudaMalloc(&p1, size); // Allocate memory on device 1
 MyKernel<<<1000, 128>>>(p1); // Launch kernel on device 1
 ```
 
-3.2.6.3. Stream and Event Behavior
-        A kernel launch will fail if it is issued to a stream that is not associated to the current device as illustrated in the following code sample.
+##### 3.2.6.3. Stream and Event Behavior
+
+​        A kernel launch will fail if it is issued to a stream that is not associated to the current device as illustrated in the following code sample.
 
 ```c++
 cudaSetDevice(0); // Set device 0 as current
@@ -1039,7 +1059,7 @@ current device.
 ​        cudaStreamWaitEvent() will succeed even if the input stream and input event are associated to different devices. cudaStreamWaitEvent() can therefore be used to synchronize multiple devices with each other.
 ​         Each device has its own default stream (see Default Stream), so commands issued to the default stream of a device may execute out of order or concurrently with respect to commands issued to the default stream of any other device.
 
-3.2.6.4. Peer-to-Peer Memory Access
+##### 3.2.6.4. Peer-to-Peer Memory Access
 
 ​        Depending on the system properties, specifically the PCIe and/or NVLINK topology, devices are able to address each other's memory (i.e., a kernel executing on one device can dereference a pointer to the memory of the other device). This peer-to-peer memory access feature is supported between two devices if cudaDeviceCanAccessPeer() returns true for these two devices. 
 
@@ -1061,7 +1081,7 @@ cudaDeviceEnablePeerAccess(0, 0); // Enable peer-to-peer access
 MyKernel<<<1000, 128>>>(p0); 
 ```
 
-3.2.6.4.1. IOMMU on Linux 
+###### 3.2.6.4.1. IOMMU on Linux 
 
 ​        On Linux only, CUDA and the display driver does not support IOMMU-enabled bare-metal PCIe peer to peer memory copy. However, CUDA and the display driver does support IOMMU via VM pass through. As a consequence, users on Linux, when running on a native bare metal system, should disable the IOMMU. The IOMMU should be enabled and the VFIO driver be used as a PCIe pass through for virtual machines.
 
@@ -1069,7 +1089,7 @@ MyKernel<<<1000, 128>>>(p0);
 
 ​        See also Allocating DMA Buffers on 64-bit Platforms. 
 
-3.2.6.5. Peer-to-Peer Memory Copy 
+##### 3.2.6.5. Peer-to-Peer Memory Copy 
 
 ​        Memory copies can be performed between the memories of two different devices. 
 
@@ -1102,7 +1122,7 @@ MyKernel<<<1000, 128>>>(p1); // Launch kernel on device 1
 
 ​        Note that if peer-to-peer access is enabled between two devices via cudaDeviceEnablePeerAccess() as described in Peer-to-Peer Memory Access, peerto-peer memory copy between these two devices no longer needs to be staged through the host and is therefore faster. 
 
-3.2.7. Unified Virtual Address Space 
+#### 3.2.7. Unified Virtual Address Space 
 
 ​         When the application is run as a 64-bit process, a single address space is used for the host and all the devices of compute capability 2.0 and higher. All host memory allocations made via CUDA API calls and all device memory allocations on supported devices are within this virtual address range. As a consequence: 
 
@@ -1114,7 +1134,7 @@ MyKernel<<<1000, 128>>>(p1); // Launch kernel on device 1
 
 ​         Applications may query if the unified address space is used for a particular device by checking that the unifiedAddressing device property (see Device Enumeration) is equal to 1. 
 
-3.2.8. Interprocess Communication 
+#### 3.2.8. Interprocess Communication 
 
 ​        Any device memory pointer or event handle created by a host thread can be directly referenced by any other thread within the same process. It is not valid outside this process however, and therefore cannot be directly referenced by threads belonging to a different process.
 
@@ -1130,7 +1150,7 @@ MyKernel<<<1000, 128>>>(p1); // Launch kernel on device 1
 CUDA IPC calls are not supported on Tegra devices.
 ```
 
-3.2.9. Error Checking 
+#### 3.2.9. Error Checking 
 
 ​        All runtime functions return an error code, but for an asynchronous function (see Asynchronous Concurrent Execution), this error code cannot possibly report any of the asynchronous errors that could occur on the device since the function returns before the device has completed the task; the error code only reports errors that occur on the host prior to executing the task, typically related to parameter validation; if an asynchronous error occurs, it will be reported by some subsequent unrelated runtime function call. 
 
@@ -1142,13 +1162,13 @@ CUDA IPC calls are not supported on Tegra devices.
 
 ​        Note that cudaErrorNotReady that may be returned by cudaStreamQuery() and cudaEventQuery() is not considered an error and is therefore not reported by cudaPeekAtLastError() or cudaGetLastError(). 
 
-3.2.10. Call Stack 
+#### 3.2.10. Call Stack 
 
 ​        On devices of compute capability 2.x and higher, the size of the call stack can be queried using cudaDeviceGetLimit() and set using cudaDeviceSetLimit(). 
 
 ​        When the call stack overflows, the kernel call fails with a stack overflow error if the application is run via a CUDA debugger (cuda-gdb, Nsight) or an unspecified launch error, otherwise. 
 
-3.2.11. Texture and Surface Memory 
+#### 3.2.11. Texture and Surface Memory 
 
 ​        CUDA supports a subset of the texturing hardware that the GPU uses for graphics to access texture and surface memory. Reading data from texture or surface memory instead of global memory can have several performance benefits as described in Device Memory Accesses. 
 
