@@ -929,7 +929,7 @@ cudaStreamEndCapture(stream1, &graph);
 
 ​        It is invalid to synchronize or query the execution status of a stream which is being captured or a captured event, because they do not represent items scheduled for execution. It is also invalid to query the execution status of or synchronize a broader handle which encompasses an active stream capture, such as a device or context handle when any associated stream is in capture mode.
 
-​        When any stream in the same context is being captured, and it was not created with cudaStreamNonBlocking(这是一个flag，并不是函数), any attempted use of the legacy stream is invalid. This is because the legacy stream handle at all times encompasses these other streams; enqueueing to the legacy stream would create a dependency on the streams being captured, and querying it or synchronizing it would query or synchronize the streams being captured. 
+​        When any stream in the same context is being captured, and it was not created with cudaStreamNonBlocking(这是一个flag，并不是函数), any attempted use of the legacy stream is invalid. This is because the legacy stream handle at all times encompasses(包含，涉及，包围) these other streams; enqueueing to the legacy stream would create a dependency on the streams being captured, and querying it or synchronizing it would query or synchronize the streams being captured. 
 
 ​        It is therefore also invalid to call synchronous APIs in this case. Synchronous APIs, such as cudaMemcpy(), enqueue work to the legacy stream and synchronize it before returning. 
 
@@ -1063,7 +1063,7 @@ current device.
 
 ​        Depending on the system properties, specifically the PCIe and/or NVLINK topology, devices are able to address each other's memory (i.e., a kernel executing on one device can dereference a pointer to the memory of the other device). This peer-to-peer memory access feature is supported between two devices if cudaDeviceCanAccessPeer() returns true for these two devices. 
 
-​        Peer-to-peer memory access is only supported in 64-bit applications and must be enabled between two devices by calling cudaDeviceEnablePeerAccess() as illustrated in the following code sample. On non-NVSwitch enabled systems, each device can support a system-wide maximum of eight peer connections.
+​        Peer-to-peer memory access is only supported in 64-bit applications and must be enabled between two devices by calling cudaDeviceEnablePeerAccess() as illustrated in the following code sample. On non-NVSwitch enabled systems, each device can support a system-wide maximum of eight peer connections.(非NVSwitch使能的系统可以8个互联，那NVSwitch使能的系统几个设备可以互联)
 
 ​        A unified address space is used for both devices (see Unified Virtual Address Space), so the same pointer can be used to address memory from both devices as shown in the code sample below. 
 
@@ -1084,6 +1084,8 @@ MyKernel<<<1000, 128>>>(p0);
 ###### 3.2.6.4.1. IOMMU on Linux 
 
 ​        On Linux only, CUDA and the display driver does not support IOMMU-enabled bare-metal PCIe peer to peer memory copy. However, CUDA and the display driver does support IOMMU via VM pass through. As a consequence, users on Linux, when running on a native bare metal system, should disable the IOMMU. The IOMMU should be enabled and the VFIO driver be used as a PCIe pass through for virtual machines.
+
+​        (IOMMU是啥？ bare metal system是裸机的意思？)
 
 ​        On Windows the above limitation does not exist. 
 
@@ -1120,7 +1122,7 @@ MyKernel<<<1000, 128>>>(p1); // Launch kernel on device 1
 
 ​        Consistent with the normal behavior of streams, an asynchronous copy between the memories of two devices may overlap with copies or kernels in another stream. 
 
-​        Note that if peer-to-peer access is enabled between two devices via cudaDeviceEnablePeerAccess() as described in Peer-to-Peer Memory Access, peerto-peer memory copy between these two devices no longer needs to be staged through the host and is therefore faster. 
+​        Note that if peer-to-peer access is enabled between two devices via cudaDeviceEnablePeerAccess() as described in Peer-to-Peer Memory Access, peer-to-peer memory copy between these two devices no longer needs to be staged through the host and is therefore faster. 
 
 #### 3.2.7. Unified Virtual Address Space 
 
@@ -1130,11 +1132,11 @@ MyKernel<<<1000, 128>>>(p1); // Launch kernel on device 1
 
 2、When copying to or from the memory of any device which uses the unified address space, the cudaMemcpyKind parameter of cudaMemcpy*() can be set to cudaMemcpyDefault to determine locations from the pointers. This also works for host pointers not allocated through CUDA, as long as the current device uses unified addressing. 
 
-3、Allocations via cudaHostAlloc() are automatically portable (see Portable Memory) across all the devices for which the unified address space is used, and pointers returned by cudaHostAlloc() can be used directly from within kernels running on these devices (i.e., there is no need to obtain a device pointer via cudaHostGetDevicePointer() as described in Mapped Memory. 
+3、Allocations via cudaHostAlloc() are automatically portable (see Portable Memory) across all the devices for which the unified address space is used, and pointers returned by cudaHostAlloc() can be used directly from within kernels running on these devices (i.e., there is no need to obtain a device pointer via cudaHostGetDevicePointer() as described in Mapped Memory. (如果是映射存储器，直接在kernel中用)
 
 ​         Applications may query if the unified address space is used for a particular device by checking that the unifiedAddressing device property (see Device Enumeration) is equal to 1. 
 
-#### 3.2.8. Interprocess Communication 
+#### 3.2.8. Interprocess Communication (进程间通信)
 
 ​        Any device memory pointer or event handle created by a host thread can be directly referenced by any other thread within the same process. It is not valid outside this process however, and therefore cannot be directly referenced by threads belonging to a different process.
 

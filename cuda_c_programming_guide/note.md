@@ -34,4 +34,16 @@ cudaStreamDestroy()
 
 
 
+创建event的API:
+
+cudaEventCreate()
+
+cudaEventCreate()
+
+销毁event的API:
+
+cudaEventDestroy()
+
+cudaEventDestroy()
+
 不论是stream还是graph的概念，感觉都是相当高阶的，caffe里都没用到过，这些玩意儿有啥用，cudnn中会有？？？
