@@ -719,7 +719,7 @@ In this case the --default-stream per-thread compilation flag needs to be used o
     如果是nvcc来编译代码则使用的CUDA_API_PER_THREAD_DEFAULT_STREAM无效，除非编译的时候加上-DCUDA_API_PER_THREAD_DEFAULT_STREAM=1 才行
 ```
 
-​        For code that is compiled using the **--default-stream legacy** compilation flag, the default stream is a special stream called the NULL stream and each device has a single NULL stream used for all host threads. The NULL stream is special as it causes implicit synchronization as described in Implicit Synchronization.(这里是所有的主机线程有一个NULL stream)
+​        For code that is compiled using the **--default-stream legacy** compilation flag, the default stream is a special stream called the NULL stream and each device has a single NULL stream used for all host threads. The NULL stream is special as it causes implicit synchronization(隐式同步) as described in *Implicit Synchronization*(chapter3.2.5.5.4).(这里是所有的主机线程有一个NULL stream)
 
 ​        For code that is compiled without specifying a **--default-stream** compilation flag, -**-default-stream legacy** is assumed as the default.
 
@@ -783,9 +783,7 @@ for (int i = 0; i < 2; ++i)
 
 ###### 3.2.5.5.6 Host Functions (Callbacks)
 
-​        The runtime provides a way to insert a CPU function call at any point into a stream via cudaLaunchHostFunc(). The provided function is executed on the host once all commands issued to the stream before the callback have completed. The following code sample adds the host function MyCallback to each of two streams after issuing a host-to-device memory copy, a kernel launch and a device-to-host
-
-memory copy into each stream. The function will begin execution on the host after each of the device-to-host memory copies completes. 
+​        The runtime provides a way to insert a CPU function call at any point into a stream via cudaLaunchHostFunc(). The provided function is executed on the host once all commands issued to the stream before the callback have completed. The following code sample adds the host function MyCallback to each of two streams after issuing a host-to-device memory copy, a kernel launch and a device-to-host memory copy into each stream. The function will begin execution on the host after each of the device-to-host memory copies completes. 
 
 ```c++
 void CUDART_CB MyCallback(cudaStream_t stream, cudaError_t status, 
@@ -809,8 +807,6 @@ for (size_t i = 0; i < 2; ++i) {
 
 ​         The relative priorities of streams can be specified at creation using cudaStreamCreateWithPriority(). The range of allowable priorities, ordered as [ highest priority, lowest priority ] can be obtained using the cudaDeviceGetStreamPriorityRange() function. At runtime, pending work in higher-priority streams takes preference over pending work in low-priority streams. 
 
-Graph类似批量操作，预先定义，然后执行，便于优化
-
 ​         The following code sample obtains the allowable range of priorities for the current device, and creates streams with the highest and lowest available priorities. 
 
 ```C++
@@ -824,6 +820,8 @@ cudaStreamCreateWithPriority(&st_low, cudaStreamNonBlocking, priority_low);
 ```
 
 ##### 3.2.5.6. Graphs 
+
+​        Graph类似批量操作，预先定义，然后执行，便于优化
 
 ​        Graphs present a new model for work submission in CUDA. A graph is a series of operations, such as kernel launches, connected by dependencies, which is defined separately from its execution. This allows a graph to be defined once and then launched repeatedly. Separating out the definition of a graph from its execution enables a number of optimizations: first, CPU launch costs are reduced compared to streams, because much of the setup is done in advance; second, presenting the whole workflow to CUDA enables optimizations which might not be possible with the piecewise work submission mechanism of streams. 
 ​        To see the optimizations possible with graphs, consider what happens in a stream: when you place a kernel into a stream, the host driver performs a sequence of operations in preparation for the execution of the kernel on the GPU. These operations, necessary for setting up and launching the kernel, are an overhead cost which must be paid for each kernel that is issued. For a GPU kernel with a short execution time, this overhead cost can be a significant fraction of the overall end-to-end execution time.
