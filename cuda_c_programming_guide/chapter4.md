@@ -22,7 +22,11 @@
 
 ​        Starting with the Volta architecture, Independent Thread Scheduling allows full concurrency between threads, regardless of warp. With Independent Thread Scheduling, the **GPU maintains execution state per thread, including a program counter and call stack**, **and can yield execution at a per-thread granularity**(粒度), either to make better use of execution resources or to allow one thread to wait for data to be produced by another. A schedule optimizer determines how to group active threads from the same warp together into SIMT units. This retains the high throughput of SIMT execution as in prior NVIDIA GPUs, but with much more flexibility: threads can now diverge and reconverge at sub-warp granularity.
 
-​         Independent Thread Scheduling can lead to a rather different set of threads participating in the executed code than intended if the developer made assumptions about warp-synchronicity of previous hardware architectures. In particular, any warp-synchronous code (such as synchronization-free, intra-warp reductions) should be revisited to ensure compatibility with Volta and beyond. See Compute Capability 7.x for further details. 
+​         Independent Thread Scheduling can lead to a rather different set of threads participating in the executed code than intended if the developer made assumptions about warp-synchronicity(同步性，同时发生) of previous hardware architectures. In particular, any warp-synchronous code (such as synchronization-free, intra-warp reductions) should be revisited to ensure compatibility with Volta and beyond. See Compute Capability 7.x for further details. 
+
+关于warp和thread block之间的关系，参考 https://blog.csdn.net/efforever/article/details/70879699
+
+这里做一个简单的说明。每一个warp执行32个线程，每一个multi-stream processor同时只能执行一个warp，尽量让一个block的线程数量是32的整数倍，这样idle比较少，尽量一个multi-stream processor多分配一些thread block, 这样每个multi-stream processor的
 
 #### Notes
 
