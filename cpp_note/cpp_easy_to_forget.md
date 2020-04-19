@@ -83,4 +83,9 @@ reference  https://blog.csdn.net/creator123123/article/details/81572273
 ​                   https://zhuanlan.zhihu.com/p/39377425
 
 ### 5、智能指针
+### 6、new操作符
+参考 https://www.cnblogs.com/balingybj/p/4695108.html
+placement new仅在一个已经分配好的内存指针上调用构造函数，基本形式如下：
+void* operator new (std::size_t size, void* ptr) noexcept;
+new (1) class_constructor(...)
 
